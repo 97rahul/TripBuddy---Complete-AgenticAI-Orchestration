@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TripBuddy AI Travel Planner</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.0/jspdf.umd.min.js"></script>
+    <style>
+      :root {
+        --bg: #07111f;
+        --bg-2: #0d1b2a;
+        --panel: rgba(15, 23, 42, 0.9);
+        --panel-soft: rgba(30, 41, 59, 0.78);
+        --primary: #67e8f9;
+        --primary-strong: #22d3ee;
+        --accent: #f472b6;
+        --text: #edf6ff;
+        --muted: #b7c7dd;
+        --success: #34d399;
+        --danger: #f87171;
+        --border: rgba(148, 163, 184, 0.18);
+        --shadow: 0 20px 45px rgba(3, 7, 18, 0.38);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: radial-gradient(circle at top left, rgba(103,232,249,0.12), transparent 28%),
+                    radial-gradient(circle at bottom right, rgba(244,114,182,0.10), transparent 22%),
+                    linear-gradient(135deg, var(--bg) 0%, var(--bg-2) 50%, #101827 100%);
+        color: var(--text);
+      }
+
+      .container {
+        max-width: 1220px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 18px;
+        align-items: center;
+        margin-bottom: 28px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .brand-badge {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        font-size: 1.4rem;
+        border-radius: 14px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+        color: #04131d;
+        font-weight: 700;
+        box-shadow: var(--shadow);
+      }
+
+      .brand-text h1 {
+        margin: 0;
+        font-size: clamp(2rem, 4vw, 3rem);
+        letter-spacing: -0.05em;
+      }
+
+      .brand-text span {
+        display: inline-block;
+        color: var(--muted);
+        margin-top: 4px;
+        font-size: 0.9rem;
+      }
+
+      .badge {
+        border: 1px solid rgba(103, 232, 249, 0.25);
+        background: rgba(103, 232, 249, 0.08);
+        color: var(--primary);
+        padding: 9px 14px;
+        border-radius: 999px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-size: 0.76rem;
+      }
+
+      .hero-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 24px;
+      }
+
+      .chip {
+        background: rgba(255,255,255,0.04);
+        color: var(--muted);
+        border: 1px solid var(--border);
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 1.18fr 0.92fr;
+        gap: 24px;
+      }
+
+      .panel {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.8));
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+      }
+
+      .compose {
+        padding: 22px;
+      }
+
+      .panel-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+
+      .panel-title h2 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+
+      .meta-label {
+        color: var(--muted);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 210px;
+        resize: vertical;
+        border: 1px solid rgba(103, 232, 249, 0.22);
+        border-radius: 18px;
+        background: rgba(8, 15, 27, 0.8);
+        color: var(--text);
+        padding: 18px 16px;
+        font-size: 1rem;
+        line-height: 1.55;
+        outline: none;
+        transition: border 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      textarea:focus {
+        border-color: rgba(103, 232, 249, 0.9);
+        box-shadow: 0 0 0 4px rgba(103, 232, 249, 0.12);
+      }
+
+      .actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 18px;
+        flex-wrap: wrap;
+      }
+
+      .status {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .button-row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        border: none;
+        border-radius: 12px;
+        padding: 12px 20px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s ease, opacity 0.2s ease;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .primary-btn {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
+        color: #062233;
+      }
+
+      .secondary-btn {
+        background: rgba(255,255,255,0.02);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .pdf-btn {
+        background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+        color: white;
+      }
+
+      .results {
+        padding: 22px 22px 14px;
+      }
+
+      .results-inner {
+        max-height: 70vh;
+        overflow-y: auto;
+        padding-right: 8px;
+      }
+
+      .results-inner::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .results-inner::-webkit-scrollbar-thumb {
+        background: rgba(148,163,184,0.25);
+        border-radius: 999px;
+      }
+
+      .empty-state {
+        color: var(--muted);
+        background: rgba(255,255,255,0.02);
+        border: 1px dashed rgba(148,163,184,0.25);
+        border-radius: 16px;
+        padding: 18px;
+      }
+
+      .widget-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .widget {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px 12px;
+        min-height: 122px;
+      }
+
+      .widget-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .widget-bullet {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--primary);
+        box-shadow: 0 0 16px rgba(103,232,249,0.6);
+      }
+
+      .widget-bullet.pending {
+        background: rgba(148, 163, 184, 0.7);
+        box-shadow: none;
+      }
+
+      .widget-bullet.done {
+        background: var(--success);
+        box-shadow: 0 0 16px rgba(52, 211, 153, 0.6);
+      }
+
+      .widget-title {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+
+      .widget-status {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .widget-meta {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 0.8rem;
+        line-height: 1.5;
+      }
+
+      .spinner {
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(103,232,249,0.25);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        display: inline-block;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      .card {
+        background: rgba(17, 24, 39, 0.86);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 16px 18px;
+        margin-top: 16px;
+      }
+
+      .card h3 {
+        margin: 0 0 10px 0;
+        font-size: 1.03rem;
+        color: var(--primary);
+      }
+
+      .answer {
+        white-space: pre-wrap;
+        line-height: 1.65;
+        color: #eff7ff;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .pill {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--border);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 7px 10px;
+        font-size: 0.77rem;
+      }
+
+      .success {
+        color: var(--success);
+        background: rgba(52, 211, 153, 0.08);
+        border: 1px solid rgba(52, 211, 153, 0.28);
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-top: 10px;
+        font-weight: 600;
+      }
+
+      .error {
+        color: var(--danger);
+        background: rgba(248,113,113,0.08);
+        border: 1px solid rgba(248,113,113,0.28);
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-top: 10px;
+      }
+
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="topbar">
+        <div class="brand">
+          <div class="brand-badge">✈️</div>
+          <div class="brand-text">
+            <h1>TripBuddy</h1>
+            <span>AI-powered travel planner</span>
+          </div>
+        </div>
+        <span class="badge">Travel smarter</span>
+      </div>
+
+      <div class="hero-strip">
+        <span class="chip">Flights</span>
+        <span class="chip">Hotels</span>
+        <span class="chip">Itineraries</span>
+        <span class="chip">Budget planning</span>
+        <span class="chip">Custom trips</span>
+      </div>
+
+      <div class="layout">
+        <section class="panel compose">
+          <div class="panel-title">
+            <h2>Plan your next trip</h2>
+            <span class="meta-label">AI assistant</span>
+          </div>
+
+          <textarea id="travelInput" placeholder="Example: Plan a 7-day trip to Japan from India with budget-friendly flights and hotels."></textarea>
+
+          <div class="actions">
+            <span id="statusText" class="status">Ready to create your custom itinerary.</span>
+            <div class="button-row">
+              <button type="button" class="secondary-btn" id="clearBtn">Clear</button>
+              <button type="button" class="primary-btn" id="submitBtn">Generate Plan</button>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel results">
+          <div class="panel-title">
+            <h2>Travel summary</h2>
+            <button type="button" class="pdf-btn" id="downloadPdfBtn" disabled>Download PDF</button>
+          </div>
+          <div class="results-inner" id="resultBox">
+            <div class="empty-state">Your itinerary and travel insights will appear here.</div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      const inputField = document.getElementById('travelInput');
+      const submitBtn = document.getElementById('submitBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const resultBox = document.getElementById('resultBox');
+      const statusText = document.getElementById('statusText');
+      const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+      let currentResult = null;
+      let widgetInterval = null;
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function renderLoadingWidgets() {
+        const stages = [
+          { title: 'Flights', status: 'Fetching', meta: 'Live flight metadata ⏳' },
+          { title: 'Hotels', status: 'Checking', meta: 'Nearby stay options ⏳' },
+          { title: 'Itinerary', status: 'Planning', meta: 'Final route generation ⏳' }
+        ];
+
+        resultBox.innerHTML = `
+          <div class="empty-state">Processing your travel request...</div>
+          <div class="widget-grid">
+            ${stages.map((stage, index) => `
+              <div class="widget" data-stage="${index}">
+                <div class="widget-header">
+                  <span class="widget-bullet pending"></span>
+                  <span class="widget-title">${stage.title}</span>
+                </div>
+                <div class="widget-status">${stage.status}</div>
+                <div class="widget-meta">${stage.meta}</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+
+        const widgets = [...document.querySelectorAll('.widget')];
+        let activeIndex = 0;
+
+        widgetInterval = setInterval(() => {
+          widgets.forEach((widget, index) => {
+            const bullet = widget.querySelector('.widget-bullet');
+            const status = widget.querySelector('.widget-status');
+            const meta = widget.querySelector('.widget-meta');
+
+            if (index < activeIndex) {
+              bullet.classList.remove('pending');
+              bullet.classList.add('done');
+              status.textContent = 'Fetched';
+              meta.textContent = 'Metadata confirmed ✓';
+            } else if (index === activeIndex) {
+              bullet.classList.remove('done');
+              bullet.classList.add('pending');
+              const spinner = document.createElement('span');
+              spinner.className = 'spinner';
+              if (!widget.querySelector('.spinner')) {
+                widget.querySelector('.widget-header').appendChild(spinner);
+              }
+              status.textContent = 'Fetching';
+              meta.textContent = index === 0 ? 'Flight metadata loading...' : index === 1 ? 'Hotel metadata loading...' : 'Itinerary metadata loading...';
+            } else {
+              bullet.classList.remove('done');
+              bullet.classList.add('pending');
+              if (widget.querySelector('.spinner')) {
+                widget.querySelector('.spinner').remove();
+              }
+              status.textContent = 'Pending';
+              meta.textContent = 'Waiting...';
+            }
+          });
+
+          activeIndex = Math.min(activeIndex + 1, widgets.length);
+          if (activeIndex >= widgets.length) {
+            clearInterval(widgetInterval);
+          }
+        }, 700);
+      }
+
+      function renderResults(data) {
+        if (widgetInterval) {
+          clearInterval(widgetInterval);
+          widgetInterval = null;
+        }
+
+        const answer = data.answer || 'No itinerary generated.';
+        const flights = data.flight_results || 'No flight data available.';
+        const hotels = data.hotel_results || 'No hotel data available.';
+        const itinerary = data.itinerary || 'No itinerary data available.';
+
+        resultBox.innerHTML = `
+          <div class="success">Trip plan generated successfully.</div>
+          <div class="card">
+            <h3>Final Answer</h3>
+            <div class="answer">${escapeHtml(answer).replace(/\n/g, '<br>')}</div>
+          </div>
+          <div class="card">
+            <h3>Flights</h3>
+            <div class="answer">${escapeHtml(flights).replace(/\n/g, '<br>')}</div>
+          </div>
+          <div class="card">
+            <h3>Hotels</h3>
+            <div class="answer">${escapeHtml(hotels).replace(/\n/g, '<br>')}</div>
+          </div>
+          <div class="card">
+            <h3>Itinerary</h3>
+            <div class="answer">${escapeHtml(itinerary).replace(/\n/g, '<br>')}</div>
+          </div>
+          <div class="meta">
+            <span class="pill">Thread: ${escapeHtml(data.thread_id || 'N/A')}</span>
+            <span class="pill">LLM Calls: ${escapeHtml(data.llm_calls || 0)}</span>
+          </div>
+        `;
+
+        downloadPdfBtn.disabled = false;
+      }
+
+      async function submitRequest() {
+        const message = inputField.value.trim();
+
+        if (!message) {
+          statusText.textContent = 'Please enter a trip request first.';
+          inputField.focus();
+          return;
+        }
+
+        if (widgetInterval) clearInterval(widgetInterval);
+        currentResult = null;
+        statusText.textContent = 'Planning your trip...';
+        submitBtn.disabled = true;
+        renderLoadingWidgets();
+        downloadPdfBtn.disabled = true;
+
+        try {
+          const response = await fetch('/api/travel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Something went wrong while planning the trip.');
+          }
+
+          currentResult = data;
+          renderResults(data);
+          statusText.textContent = 'Trip plan ready.';
+        } catch (error) {
+          if (widgetInterval) {
+            clearInterval(widgetInterval);
+            widgetInterval = null;
+          }
+          currentResult = null;
+          resultBox.innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`;
+          statusText.textContent = 'Request failed.';
+          downloadPdfBtn.disabled = true;
+        } finally {
+          submitBtn.disabled = false;
+        }
+      }
+
+      function downloadPdf() {
+        if (!currentResult) {
+          statusText.textContent = 'Generate a trip plan before downloading the PDF.';
+          return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 14;
+        let y = 18;
+
+        doc.setFillColor(7, 17, 31);
+        doc.rect(0, 0, pageWidth, 32, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.text('TripBuddy Travel Itinerary', margin, 20);
+        doc.setFontSize(11);
+        doc.text('Prepared with AI travel planner', margin, 27);
+        doc.setTextColor(20, 30, 40);
+
+        const sections = [
+          ['Trip Summary', currentResult.answer || 'No summary available'],
+          ['Flight Information', currentResult.flight_results || 'No flight data available'],
+          ['Hotel Suggestions', currentResult.hotel_results || 'No hotel data available'],
+          ['Day-by-Day Itinerary', currentResult.itinerary || 'No itinerary data available'],
+        ];
+
+        sections.forEach(([title, body]) => {
+          if (y > 250) {
+            doc.addPage();
+            y = 20;
+          }
+
+          doc.setTextColor(12, 103, 140);
+          doc.setFontSize(13);
+          doc.text(title, margin, y);
+          y += 7;
+
+          doc.setTextColor(30, 41, 59);
+          doc.setFontSize(10);
+          const lines = doc.splitTextToSize(body.replace(/\s+/g, ' ').trim(), pageWidth - margin * 2);
+          lines.forEach((line) => {
+            if (y > 285) {
+              doc.addPage();
+              y = 20;
+            }
+            doc.text(line, margin, y);
+            y += 5.2;
+          });
+
+          y += 8;
+        });
+
+        doc.save(`tripbuddy-itinerary-${Date.now()}.pdf`);
+        statusText.textContent = 'PDF downloaded successfully.';
+      }
+
+      submitBtn.addEventListener('click', submitRequest);
+      clearBtn.addEventListener('click', () => {
+        if (widgetInterval) {
+          clearInterval(widgetInterval);
+          widgetInterval = null;
+        }
+        inputField.value = '';
+        inputField.focus();
+        currentResult = null;
+        downloadPdfBtn.disabled = true;
+        resultBox.innerHTML = '<div class="empty-state">Your itinerary and travel insights will appear here.</div>';
+        statusText.textContent = 'Ready to create your custom itinerary.';
+      });
+
+      downloadPdfBtn.addEventListener('click', downloadPdf);
+
+      inputField.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+          submitRequest();
+        }
+      });
+    </script>
+  </body>
+</html>
