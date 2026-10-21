@@ -16,3 +16,4 @@ uvicorn
 jinja2
 streamlit
 pytest
+langchain-mcp-adapters

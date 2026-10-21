@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 st.title("✈️ TripBuddy - Your AI Travel Planner")
-st.caption("Plan flights, hotels, and a complete trip itinerary in minutes.")
+st.caption("Plan flights, hotels, weather, and a complete trip itinerary in minutes.")
 
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = None
@@ -41,7 +41,7 @@ if submit:
     if not prompt.strip():
         st.warning("Please enter a travel request before planning your trip.")
     else:
-        with st.spinner("Researching flights, hotels, and itinerary..."):
+        with st.spinner("Researching flights, hotels, weather, and itinerary..."):
             result = run_travel_agent(prompt, st.session_state.thread_id)
             st.session_state.thread_id = result.get("thread_id")
 
@@ -66,6 +66,13 @@ if submit:
                 st.text(hotels)
             else:
                 st.json(hotels)
+
+        with st.expander("Weather Information", expanded=False):
+            weather = result.get("weather_results") or "No weather information available."
+            if isinstance(weather, str):
+                st.text(weather)
+            else:
+                st.json(weather)
 
         with st.expander("Day-by-Day Itinerary", expanded=False):
             itinerary = result.get("itinerary") or "No itinerary generated."
