@@ -17,3 +17,4 @@ jinja2
 streamlit
 pytest
 langchain-mcp-adapters
+nest_asyncio

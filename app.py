@@ -1,4 +1,5 @@
 import traceback
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -13,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(
     title="TripBuddy - Your AI Travel Companion",
-    description="TripBuddy is an AI-powered travel assistant that helps users plan and book trips seamlessly.",
+    description="TripBuddy is an AI-powered travel assistant that helps users plan trips with flight, hotel, and weather information.",
     version="1.0.0",
 )
 
@@ -46,7 +47,7 @@ async def serve_frontend():
 
 
 @app.post("/api/travel")
-async def travel_planner(request: TravelRequest):
+def travel_planner(request: TravelRequest):
     try:
         user_message = request.message.strip()
 
@@ -65,7 +66,8 @@ async def travel_planner(request: TravelRequest):
                 "answer": result["answer"],
                 "flight_results": result["flight_results"],
                 "hotel_results": result["hotel_results"],
-                "itinerary": result["itinerary"],
+                "weather_results": result["weather_results"],
+                "itenary": result["itenary"],
                 "llm_calls": result["llm_calls"],
             }
         )
@@ -83,5 +85,5 @@ async def travel_planner(request: TravelRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
-
+    port = int(os.getenv("TRIPBUDDY_PORT", "8001"))
+    uvicorn.run("app:app", host="127.0.0.1", port=port, reload=False)
