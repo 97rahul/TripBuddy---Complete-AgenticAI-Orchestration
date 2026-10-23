@@ -110,7 +110,7 @@
 
       .layout {
         display: grid;
-        grid-template-columns: 1.18fr 0.92fr;
+        grid-template-columns: 1fr;
         gap: 24px;
       }
 
@@ -223,18 +223,7 @@
       }
 
       .results-inner {
-        max-height: 70vh;
-        overflow-y: auto;
-        padding-right: 8px;
-      }
-
-      .results-inner::-webkit-scrollbar {
-        width: 8px;
-      }
-
-      .results-inner::-webkit-scrollbar-thumb {
-        background: rgba(148,163,184,0.25);
-        border-radius: 999px;
+        padding: 0 4px 10px;
       }
 
       .empty-state {
@@ -323,21 +312,103 @@
       .card {
         background: rgba(17, 24, 39, 0.86);
         border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 16px 18px;
-        margin-top: 16px;
+        border-radius: 18px;
+        padding: 22px 24px;
+        margin-top: 18px;
       }
 
       .card h3 {
-        margin: 0 0 10px 0;
-        font-size: 1.03rem;
+        margin: 0 0 14px 0;
+        font-size: 1.2rem;
         color: var(--primary);
       }
 
       .answer {
         white-space: pre-wrap;
-        line-height: 1.65;
+        font-size: 1.08rem;
+        line-height: 1.85;
         color: #eff7ff;
+        overflow-wrap: anywhere;
+      }
+
+      .answer-rich {
+        white-space: normal;
+      }
+
+      .answer-rich h4 {
+        margin: 22px 0 8px;
+        color: var(--primary);
+        font-size: 1.15rem;
+        line-height: 1.4;
+      }
+
+      .answer-rich h4:first-child {
+        margin-top: 0;
+      }
+
+      .answer-rich p {
+        margin: 0 0 12px;
+      }
+
+      .answer-rich ul,
+      .answer-rich ol {
+        margin: 8px 0 16px;
+        padding-left: 28px;
+      }
+
+      .answer-rich li {
+        margin: 6px 0;
+        padding-left: 3px;
+      }
+
+      .answer-rich strong {
+        color: #ffffff;
+      }
+
+      .answer-rich a {
+        color: var(--primary);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      .answer-table-wrap {
+        margin: 14px 0 18px;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+
+      .answer-rich table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.98rem;
+        line-height: 1.6;
+      }
+
+      .answer-rich th,
+      .answer-rich td {
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .answer-rich th {
+        background: rgba(103, 232, 249, 0.1);
+        color: var(--primary);
+        font-weight: 700;
+      }
+
+      .answer-rich tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .answer-rich blockquote {
+        margin: 12px 0;
+        padding: 10px 14px;
+        border-left: 3px solid var(--primary);
+        background: rgba(103, 232, 249, 0.06);
+        color: var(--muted);
       }
 
       .meta {
@@ -452,10 +523,123 @@
           .replace(/'/g, '&#039;');
       }
 
+      function renderMarkdown(value) {
+        const lines = String(value).replace(/\r\n?/g, '\n').split('\n');
+        const output = [];
+        let paragraph = [];
+        let listType = null;
+
+        const formatInline = (text) => escapeHtml(text)
+          .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+            '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/__(.+?)__/g, '<strong>$1</strong>')
+          .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+          .replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+        const flushParagraph = () => {
+          if (paragraph.length) {
+            output.push(`<p>${formatInline(paragraph.join(' '))}</p>`);
+            paragraph = [];
+          }
+        };
+
+        const closeList = () => {
+          if (listType) {
+            output.push(`</${listType}>`);
+            listType = null;
+          }
+        };
+
+        const isTableDivider = (line) =>
+          /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+        const parseTableRow = (line) => line
+          .trim()
+          .replace(/^\|/, '')
+          .replace(/\|$/, '')
+          .split('|')
+          .map((cell) => cell.trim());
+
+        for (let index = 0; index < lines.length; index += 1) {
+          const line = lines[index];
+          const heading = line.match(/^\s{0,3}#{1,4}\s+(.+?)\s*#*\s*$/);
+          const unorderedItem = line.match(/^\s*[-*+]\s+(.+)$/);
+          const orderedItem = line.match(/^\s*\d+[.)]\s+(.+)$/);
+
+          if (line.includes('|') && lines[index + 1] && isTableDivider(lines[index + 1])) {
+            flushParagraph();
+            closeList();
+
+            const headers = parseTableRow(line);
+            index += 2;
+            const rows = [];
+            while (index < lines.length && lines[index].includes('|') && lines[index].trim()) {
+              rows.push(parseTableRow(lines[index]));
+              index += 1;
+            }
+            index -= 1;
+
+            output.push('<div class="answer-table-wrap"><table><thead><tr>');
+            output.push(headers.map((cell) => `<th>${formatInline(cell)}</th>`).join(''));
+            output.push('</tr></thead><tbody>');
+            output.push(rows.map((row) => {
+              const cells = headers.map((_, cellIndex) =>
+                `<td>${formatInline(row[cellIndex] || '')}</td>`
+              ).join('');
+              return `<tr>${cells}</tr>`;
+            }).join(''));
+            output.push('</tbody></table></div>');
+            continue;
+          }
+
+          if (!line.trim()) {
+            flushParagraph();
+            closeList();
+            continue;
+          }
+
+          if (heading) {
+            flushParagraph();
+            closeList();
+            output.push(`<h4>${formatInline(heading[1])}</h4>`);
+            continue;
+          }
+
+          const quote = line.match(/^\s*>\s?(.*)$/);
+          if (quote) {
+            flushParagraph();
+            closeList();
+            output.push(`<blockquote>${formatInline(quote[1])}</blockquote>`);
+            continue;
+          }
+
+          const item = unorderedItem || orderedItem;
+          if (item) {
+            flushParagraph();
+            const nextListType = unorderedItem ? 'ul' : 'ol';
+            if (listType !== nextListType) {
+              closeList();
+              output.push(`<${nextListType}>`);
+              listType = nextListType;
+            }
+            output.push(`<li>${formatInline(item[1])}</li>`);
+            continue;
+          }
+
+          closeList();
+          paragraph.push(line.trim());
+        }
+
+        flushParagraph();
+        closeList();
+        return output.join('');
+      }
+
       function renderLoadingWidgets() {
         const stages = [
           { title: 'Flights', status: 'Fetching', meta: 'Live flight metadata ⏳' },
           { title: 'Hotels', status: 'Checking', meta: 'Nearby stay options ⏳' },
+          { title: 'Weather', status: 'Checking', meta: 'Destination conditions ⏳' },
           { title: 'Itinerary', status: 'Planning', meta: 'Final route generation ⏳' }
         ];
 
@@ -498,7 +682,7 @@
                 widget.querySelector('.widget-header').appendChild(spinner);
               }
               status.textContent = 'Fetching';
-              meta.textContent = index === 0 ? 'Flight metadata loading...' : index === 1 ? 'Hotel metadata loading...' : 'Itinerary metadata loading...';
+              meta.textContent = `${stages[index].title} information loading...`;
             } else {
               bullet.classList.remove('done');
               bullet.classList.add('pending');
@@ -526,13 +710,14 @@
         const answer = data.answer || 'No itinerary generated.';
         const flights = data.flight_results || 'No flight data available.';
         const hotels = data.hotel_results || 'No hotel data available.';
+        const weather = data.weather_results || 'No weather information available.';
         const itinerary = data.itinerary || 'No itinerary data available.';
 
         resultBox.innerHTML = `
           <div class="success">Trip plan generated successfully.</div>
           <div class="card">
             <h3>Final Answer</h3>
-            <div class="answer">${escapeHtml(answer).replace(/\n/g, '<br>')}</div>
+            <div class="answer answer-rich">${renderMarkdown(answer)}</div>
           </div>
           <div class="card">
             <h3>Flights</h3>
@@ -541,6 +726,10 @@
           <div class="card">
             <h3>Hotels</h3>
             <div class="answer">${escapeHtml(hotels).replace(/\n/g, '<br>')}</div>
+          </div>
+          <div class="card">
+            <h3>Weather</h3>
+            <div class="answer">${escapeHtml(weather).replace(/\n/g, '<br>')}</div>
           </div>
           <div class="card">
             <h3>Itinerary</h3>
@@ -585,6 +774,7 @@
           }
 
           currentResult = data;
+          currentResult.user_request = message;
           renderResults(data);
           statusText.textContent = 'Trip plan ready.';
         } catch (error) {
@@ -610,50 +800,195 @@
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.getWidth();
-        const margin = 14;
-        let y = 18;
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 18;
+        const contentWidth = pageWidth - margin * 2;
+        let y = 50;
 
         doc.setFillColor(7, 17, 31);
-        doc.rect(0, 0, pageWidth, 32, 'F');
+        doc.rect(0, 0, pageWidth, 38, 'F');
+        doc.setTextColor(103, 232, 249);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(21);
+        doc.text('TripBuddy', margin, 17);
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(20);
-        doc.text('TripBuddy Travel Itinerary', margin, 20);
-        doc.setFontSize(11);
-        doc.text('Prepared with AI travel planner', margin, 27);
-        doc.setTextColor(20, 30, 40);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        doc.text('Your personalized travel plan', margin, 25);
+        doc.setTextColor(30, 41, 59);
+
+        const drawPageHeader = () => {
+          doc.setFillColor(7, 17, 31);
+          doc.rect(0, 0, pageWidth, 18, 'F');
+          doc.setTextColor(103, 232, 249);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(11);
+          doc.text('TripBuddy  |  Travel Plan', margin, 12);
+          doc.setTextColor(30, 41, 59);
+          y = 27;
+        };
+
+        const ensureSpace = (height) => {
+          if (y + height > pageHeight - margin) {
+            doc.addPage();
+            drawPageHeader();
+          }
+        };
+
+        const writeText = (text, options = {}) => {
+          const {
+            fontSize = 10.5,
+            bold = false,
+            color = [30, 41, 59],
+            indent = 0,
+            gapAfter = 0,
+          } = options;
+          const normalized = String(text).replace(/\s+/g, ' ').trim();
+          if (!normalized) {
+            y += gapAfter;
+            return;
+          }
+
+          doc.setFont('helvetica', bold ? 'bold' : 'normal');
+          doc.setFontSize(fontSize);
+          doc.setTextColor(...color);
+          const lineHeight = fontSize * 0.48;
+          const lines = doc.splitTextToSize(normalized, contentWidth - indent);
+          lines.forEach((line) => {
+            ensureSpace(lineHeight);
+            doc.text(line, margin + indent, y);
+            y += lineHeight;
+          });
+          y += gapAfter;
+        };
+
+        const renderTable = (table) => {
+          const rows = [...table.querySelectorAll('tr')].map((row) =>
+            [...row.querySelectorAll('th, td')].map((cell) => cell.textContent.trim())
+          );
+          const columnCount = Math.max(1, ...rows.map((row) => row.length));
+          const columnWidth = contentWidth / columnCount;
+          const cellPadding = 2.5;
+          const fontSize = columnCount > 4 ? 8 : 9;
+          const lineHeight = fontSize * 0.48;
+
+          rows.forEach((row, rowIndex) => {
+            const cellLines = Array.from({ length: columnCount }, (_, columnIndex) =>
+              doc.splitTextToSize(
+                row[columnIndex] || '',
+                columnWidth - cellPadding * 2
+              )
+            );
+            const rowHeight = Math.max(
+              9,
+              ...cellLines.map((lines) => lines.length * lineHeight + cellPadding * 2)
+            );
+            ensureSpace(rowHeight);
+
+            if (rowIndex === 0) {
+              doc.setFillColor(224, 242, 254);
+            } else if (rowIndex % 2 === 0) {
+              doc.setFillColor(248, 250, 252);
+            } else {
+              doc.setFillColor(255, 255, 255);
+            }
+            doc.setDrawColor(203, 213, 225);
+            doc.rect(margin, y - cellPadding, contentWidth, rowHeight, 'FD');
+
+            cellLines.forEach((lines, columnIndex) => {
+              const cellX = margin + columnIndex * columnWidth;
+              if (columnIndex > 0) {
+                doc.line(cellX, y - cellPadding, cellX, y - cellPadding + rowHeight);
+              }
+              doc.setFont('helvetica', rowIndex === 0 ? 'bold' : 'normal');
+              doc.setFontSize(fontSize);
+              doc.setTextColor(30, 41, 59);
+              lines.forEach((line, lineIndex) => {
+                doc.text(
+                  line,
+                  cellX + cellPadding,
+                  y + cellPadding + lineIndex * lineHeight
+                );
+              });
+            });
+            y += rowHeight;
+          });
+          y += 5;
+        };
+
+        const renderRichSection = (body) => {
+          const parsed = document.createElement('div');
+          parsed.innerHTML = renderMarkdown(body);
+
+          [...parsed.children].forEach((element) => {
+            const tag = element.tagName.toLowerCase();
+            if (tag === 'h4') {
+              ensureSpace(13);
+              writeText(element.textContent, {
+                fontSize: 12,
+                bold: true,
+                color: [12, 103, 140],
+                gapAfter: 1.5,
+              });
+            } else if (tag === 'p') {
+              writeText(element.textContent, { fontSize: 10.5, gapAfter: 3 });
+            } else if (tag === 'ul' || tag === 'ol') {
+              [...element.children].forEach((item, index) => {
+                const prefix = tag === 'ol' ? `${index + 1}. ` : '\u2022 ';
+                writeText(`${prefix}${item.textContent}`, {
+                  fontSize: 10.5,
+                  indent: 3,
+                  gapAfter: 1,
+                });
+              });
+              y += 2;
+            } else if (tag === 'div' && element.querySelector('table')) {
+              renderTable(element.querySelector('table'));
+            } else if (tag === 'blockquote') {
+              writeText(element.textContent, {
+                fontSize: 10,
+                indent: 5,
+                color: [71, 85, 105],
+                gapAfter: 3,
+              });
+            }
+          });
+        };
 
         const sections = [
+          ['Your Request', currentResult.user_request || ''],
           ['Trip Summary', currentResult.answer || 'No summary available'],
           ['Flight Information', currentResult.flight_results || 'No flight data available'],
           ['Hotel Suggestions', currentResult.hotel_results || 'No hotel data available'],
+          ['Weather Information', currentResult.weather_results || 'No weather information available'],
           ['Day-by-Day Itinerary', currentResult.itinerary || 'No itinerary data available'],
         ];
 
         sections.forEach(([title, body]) => {
-          if (y > 250) {
-            doc.addPage();
-            y = 20;
-          }
-
+          ensureSpace(20);
           doc.setTextColor(12, 103, 140);
-          doc.setFontSize(13);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(15);
           doc.text(title, margin, y);
-          y += 7;
-
-          doc.setTextColor(30, 41, 59);
-          doc.setFontSize(10);
-          const lines = doc.splitTextToSize(body.replace(/\s+/g, ' ').trim(), pageWidth - margin * 2);
-          lines.forEach((line) => {
-            if (y > 285) {
-              doc.addPage();
-              y = 20;
-            }
-            doc.text(line, margin, y);
-            y += 5.2;
-          });
-
-          y += 8;
+          y += 9;
+          renderRichSection(body);
+          y += 5;
         });
+
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let page = 1; page <= pageCount; page += 1) {
+          doc.setPage(page);
+          doc.setDrawColor(203, 213, 225);
+          doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+          doc.setTextColor(100, 116, 139);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.text(
+            `Generated ${new Date().toLocaleDateString()}  |  Page ${page} of ${pageCount}`,
+            margin,
+            pageHeight - 7
+          );
+        }
 
         doc.save(`tripbuddy-itinerary-${Date.now()}.pdf`);
         statusText.textContent = 'PDF downloaded successfully.';

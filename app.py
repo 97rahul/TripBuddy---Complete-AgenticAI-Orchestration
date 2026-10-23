@@ -58,6 +58,7 @@ def travel_planner(request: TravelRequest):
             )
 
         result = run_travel_agent(user_message, request.thread_id)
+        itinerary = result.get("itinerary") or result.get("itenary", "")
 
         return JSONResponse(
             content={
@@ -67,7 +68,8 @@ def travel_planner(request: TravelRequest):
                 "flight_results": result["flight_results"],
                 "hotel_results": result["hotel_results"],
                 "weather_results": result["weather_results"],
-                "itenary": result["itenary"],
+                "itinerary": itinerary,
+                "itenary": itinerary,
                 "llm_calls": result["llm_calls"],
             }
         )
@@ -78,7 +80,13 @@ def travel_planner(request: TravelRequest):
 
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": str(e)},
+            content={
+                "success": False,
+                "error": (
+                    "The trip planner could not complete this request. "
+                    "Please try again shortly."
+                ),
+            },
         )
 
 
