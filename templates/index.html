@@ -323,6 +323,24 @@
         color: var(--primary);
       }
 
+      .review-feedback {
+        width: 100%;
+        min-height: 110px;
+        resize: vertical;
+        border: 1px solid rgba(103, 232, 249, 0.22);
+        border-radius: 12px;
+        background: rgba(8, 15, 27, 0.8);
+        color: var(--text);
+        padding: 14px;
+        font: inherit;
+        line-height: 1.55;
+      }
+
+      .review-feedback:focus {
+        border-color: rgba(103, 232, 249, 0.9);
+        outline: 3px solid rgba(103, 232, 249, 0.12);
+      }
+
       .answer {
         white-space: pre-wrap;
         font-size: 1.08rem;
@@ -711,14 +729,43 @@
         const flights = data.flight_results || 'No flight data available.';
         const hotels = data.hotel_results || 'No hotel data available.';
         const weather = data.weather_results || 'No weather information available.';
+        const budget = data.budget_results || 'No budget assessment available.';
         const itinerary = data.itinerary || 'No itinerary data available.';
+        const waitingForApproval = data.requires_approval === true;
+        const isBlocked = data.guardrail_allowed === false;
+        const statusMessage = waitingForApproval
+          ? 'Draft itinerary ready — review it and share feedback before finalizing.'
+          : isBlocked
+            ? 'This request could not be handled.'
+            : 'Trip plan generated successfully.';
 
         resultBox.innerHTML = `
-          <div class="success">Trip plan generated successfully.</div>
+          <div class="${isBlocked ? 'error' : 'success'}">${escapeHtml(statusMessage)}</div>
           <div class="card">
-            <h3>Final Answer</h3>
+            <h3>${waitingForApproval ? 'Draft Itinerary' : 'Final Answer'}</h3>
             <div class="answer answer-rich">${renderMarkdown(answer)}</div>
           </div>
+          ${waitingForApproval ? `
+            <div class="card" id="reviewCard">
+              <h3>Review your itinerary</h3>
+              <p class="answer">${escapeHtml(data.approval_request || 'Review the draft and approve it, or request changes.')}</p>
+              <label for="reviewFeedback" class="meta-label">Feedback or changes</label>
+              <textarea
+                id="reviewFeedback"
+                class="review-feedback"
+                placeholder="Optional when approving. If requesting changes, tell us what to revise."
+                aria-describedby="reviewHelp"
+              ></textarea>
+              <p class="widget-meta" id="reviewHelp">Your feedback is sent to the planner when you choose an action below.</p>
+              <div class="actions">
+                <span class="status">Please review the draft before continuing.</span>
+                <div class="button-row">
+                  <button type="button" class="secondary-btn" id="requestChangesBtn">Request changes</button>
+                  <button type="button" class="primary-btn" id="approveItineraryBtn">Approve itinerary</button>
+                </div>
+              </div>
+            </div>
+          ` : ''}
           <div class="card">
             <h3>Flights</h3>
             <div class="answer">${escapeHtml(flights).replace(/\n/g, '<br>')}</div>
@@ -732,8 +779,12 @@
             <div class="answer">${escapeHtml(weather).replace(/\n/g, '<br>')}</div>
           </div>
           <div class="card">
+            <h3>Budget Assessment</h3>
+            <div class="answer answer-rich">${renderMarkdown(budget)}</div>
+          </div>
+          <div class="card">
             <h3>Itinerary</h3>
-            <div class="answer">${escapeHtml(itinerary).replace(/\n/g, '<br>')}</div>
+            <div class="answer answer-rich">${renderMarkdown(itinerary)}</div>
           </div>
           <div class="meta">
             <span class="pill">Thread: ${escapeHtml(data.thread_id || 'N/A')}</span>
@@ -741,7 +792,67 @@
           </div>
         `;
 
-        downloadPdfBtn.disabled = false;
+        downloadPdfBtn.disabled = isBlocked;
+
+        if (waitingForApproval) {
+          document.getElementById('approveItineraryBtn')
+            .addEventListener('click', () => submitApproval(true));
+          document.getElementById('requestChangesBtn')
+            .addEventListener('click', () => submitApproval(false));
+        }
+      }
+
+      async function submitApproval(approved) {
+        if (!currentResult || !currentResult.thread_id) {
+          statusText.textContent = 'The trip review session is missing. Please generate the plan again.';
+          return;
+        }
+
+        const feedbackField = document.getElementById('reviewFeedback');
+        const feedback = feedbackField ? feedbackField.value.trim() : '';
+        if (!approved && !feedback) {
+          statusText.textContent = 'Please describe the changes you want before submitting feedback.';
+          if (feedbackField) feedbackField.focus();
+          return;
+        }
+
+        const approveButton = document.getElementById('approveItineraryBtn');
+        const changesButton = document.getElementById('requestChangesBtn');
+        approveButton.disabled = true;
+        changesButton.disabled = true;
+        statusText.textContent = approved ? 'Finalizing your approved itinerary...' : 'Applying your feedback...';
+
+        try {
+          const response = await fetch('/api/travel/approval', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              thread_id: currentResult.thread_id,
+              approved,
+              feedback
+            })
+          });
+          const data = await response.json();
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Could not submit your itinerary review.');
+          }
+
+          data.user_request = currentResult.user_request;
+          currentResult = data;
+          renderResults(data);
+          statusText.textContent = data.requires_approval
+            ? 'The plan still needs your review.'
+            : 'Your travel plan has been finalized.';
+        } catch (error) {
+          approveButton.disabled = false;
+          changesButton.disabled = false;
+          statusText.textContent = 'Could not submit your review. Please try again.';
+          const errorNotice = document.createElement('div');
+          errorNotice.className = 'error';
+          errorNotice.textContent = error.message;
+          const reviewCard = document.getElementById('reviewCard');
+          if (reviewCard) reviewCard.prepend(errorNotice);
+        }
       }
 
       async function submitRequest() {
@@ -961,6 +1072,7 @@
           ['Flight Information', currentResult.flight_results || 'No flight data available'],
           ['Hotel Suggestions', currentResult.hotel_results || 'No hotel data available'],
           ['Weather Information', currentResult.weather_results || 'No weather information available'],
+          ['Budget Assessment', currentResult.budget_results || 'No budget assessment available'],
           ['Day-by-Day Itinerary', currentResult.itinerary || 'No itinerary data available'],
         ];
 

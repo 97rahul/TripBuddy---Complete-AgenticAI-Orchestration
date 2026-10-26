@@ -1,6 +1,7 @@
 import traceback
 import os
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +9,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend import run_travel_agent
+from backend import resume_travel_agent, run_travel_agent
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -36,6 +37,37 @@ class TravelRequest(BaseModel):
     thread_id: str | None = None
 
 
+class TravelApprovalRequest(BaseModel):
+    thread_id: str
+    approved: bool
+    feedback: str = ""
+
+
+def travel_response(result: dict[str, Any]) -> dict[str, Any]:
+    itinerary = result.get("itinerary") or result.get("itenary", "")
+    return {
+        "success": True,
+        "thread_id": result["thread_id"],
+        "answer": result["answer"],
+        "flight_results": result.get("flight_results", ""),
+        "hotel_results": result.get("hotel_results", ""),
+        "weather_results": result.get("weather_results", ""),
+        "budget_results": result.get("budget_results", ""),
+        "itinerary": itinerary,
+        "itenary": itinerary,
+        "requires_approval": result.get("requires_approval", False),
+        "approval_request": result.get("approval_request", ""),
+        "approved": result.get("approved"),
+        "human_feedback": result.get("human_feedback", ""),
+        "selected_agents": result.get("selected_agents", []),
+        "trip_constraints": result.get("trip_constraints", {}),
+        "supervisor_reasoning": result.get("supervisor_reasoning", ""),
+        "guardrail_allowed": result.get("guardrail_allowed", True),
+        "guardrail_reason": result.get("guardrail_reason", ""),
+        "llm_calls": result.get("llm_calls", 0),
+    }
+
+
 @app.get("/health")
 async def healthcheck():
     return {"status": "ok"}
@@ -58,21 +90,8 @@ def travel_planner(request: TravelRequest):
             )
 
         result = run_travel_agent(user_message, request.thread_id)
-        itinerary = result.get("itinerary") or result.get("itenary", "")
 
-        return JSONResponse(
-            content={
-                "success": True,
-                "thread_id": result["thread_id"],
-                "answer": result["answer"],
-                "flight_results": result["flight_results"],
-                "hotel_results": result["hotel_results"],
-                "weather_results": result["weather_results"],
-                "itinerary": itinerary,
-                "itenary": itinerary,
-                "llm_calls": result["llm_calls"],
-            }
-        )
+        return JSONResponse(content=travel_response(result))
 
     except Exception as e:
         print("ERROR:", e)
@@ -84,6 +103,37 @@ def travel_planner(request: TravelRequest):
                 "success": False,
                 "error": (
                     "The trip planner could not complete this request. "
+                    "Please try again shortly."
+                ),
+            },
+        )
+
+
+@app.post("/api/travel/approval")
+def travel_approval(request: TravelApprovalRequest):
+    thread_id = request.thread_id.strip()
+    if not thread_id:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": "A thread_id is required."},
+        )
+
+    try:
+        result = resume_travel_agent(
+            thread_id,
+            request.approved,
+            request.feedback,
+        )
+        return JSONResponse(content=travel_response(result))
+    except Exception as e:
+        print("ERROR:", e)
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": (
+                    "The trip planner could not resume this request. "
                     "Please try again shortly."
                 ),
             },
